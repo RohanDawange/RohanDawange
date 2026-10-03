@@ -10,8 +10,17 @@ import hashlib
 # Account permissions: read:Followers, read:Starring, read:Watching
 # Repository permissions: read:Commit statuses, read:Contents, read:Issues, read:Metadata, read:Pull Requests
 # Issues and pull requests permissions not needed at the moment, but may be used in the future
-HEADERS = {'authorization': 'token '+ os.environ['ACCESS_TOKEN']}
-USER_NAME = os.environ['USER_NAME'] # 'Andrew6rant'
+def get_access_token():
+    return os.environ.get('ACCESS_TOKEN', '')
+
+
+def get_user_name():
+    return os.environ.get('USER_NAME', '')
+
+
+HEADERS = {'authorization': 'token ' + get_access_token()} if get_access_token() else {}
+USER_NAME = get_user_name()  # 'Andrew6rant'
+OWNER_ID = None
 QUERY_COUNT = {'user_getter': 0, 'follower_getter': 0, 'graph_repos_stars': 0, 'recursive_loc': 0, 'graph_commits': 0, 'loc_query': 0}
 
 
@@ -44,6 +53,10 @@ def simple_request(func_name, query, variables):
     """
     Returns a request, or raises an Exception if the response does not succeed.
     """
+    if not HEADERS.get('authorization'):
+        raise RuntimeError(f'{func_name} requires ACCESS_TOKEN to be set in the environment.')
+    if not USER_NAME:
+        raise RuntimeError(f'{func_name} requires USER_NAME to be set in the environment.')
     request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS)
     if request.status_code == 200:
         return request
@@ -161,7 +174,9 @@ def loc_counter_one_repo(owner, repo_name, data, cache_comment, history, additio
     only adds the LOC value of commits authored by me
     """
     for node in history['edges']:
-        if node['node']['author']['user'] == OWNER_ID:
+        author = node.get('node', {}).get('author')
+        user = author.get('user') if author else None
+        if user == OWNER_ID:
             my_commits += 1
             addition_total += node['node']['additions']
             deletion_total += node['node']['deletions']
